@@ -29,14 +29,14 @@ const testUser = {
 beforeAll(async () => {
   // This will create a new instance of "MongoMemoryServer" and automatically start it
   mongodb = await MongoMemoryReplSet.create({
-    replSet: { storageEngine: 'wiredTiger' },
+    replSet: { count: 1, storageEngine: 'wiredTiger' },
   });
   const url = mongodb.getUri();
   // set the url so that our server's mongoose connects to the in-memory mongodb and not our real one
   process.env.MONGO_URL = url;
   mongooseConnection = await connectDB(url);
   server = await app.listen(8001);
-});
+}, 15000);
 
 afterAll(async () => {
   // turn off the server and mongo connections once all the tests are done
