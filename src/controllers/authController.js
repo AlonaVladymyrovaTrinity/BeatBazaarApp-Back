@@ -14,25 +14,29 @@ const register = async (req, res) => {
     throw new CustomError.BadRequestError('Please provide all required fields');
   }
 
+  const emailAlreadyExists = await User.findOne({ email }); // Check if a user with the email already exists
+  if (emailAlreadyExists) {
+    throw new CustomError.BadRequestError('Email already exists'); // If user exists, throw an error
+  }
+
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
-    // const emailAlreadyExists = await User.findOne({ email }, {}, { session }); // Check if a user with the email already exists
-    // if (emailAlreadyExists) {
-    //   throw new CustomError.BadRequestError('Email already exists'); // If user exists, throw an error
-    // }
-    //
-    // const isFirstAccount = (await User.countDocuments({}, { session })) === 0; // Check if it's the first account
-    // const role = isFirstAccount ? 'admin' : 'user'; // Assign a role based on first account or not
 
-    const [user] = await User.create([req.body], { session }); // Create a new user in the database
-    // const tokenUser = createTokenUser(user); // Create a token based on user data
-    // attachCookiesToResponse({ res, user: tokenUser }); // Attach the token to cookies and send in the response
+    const isFirstAccount = (await User.countDocuments({}, { session })) === 0; // Check if it's the first account
+    const role = isFirstAccount ? 'admin' : 'user'; // Assign a role based on first account or not
+
+    const [user] = await User.create(
+      [{ name, email, password, username, role }],
+      { session }
+    ); // Create a new user in the database
+    const tokenUser = createTokenUser(user); // Create a token based on user data
+    attachCookiesToResponse({ res, user: tokenUser }); // Attach the token to cookies and send in the response
 
     await session.commitTransaction();
 
-    res.status(StatusCodes.CREATED).json({ user }); // Send a successful response with user data
+    res.status(StatusCodes.CREATED).json({ user: tokenUser }); // Send a successful response with user data
   } catch (error) {
     console.error('ERROR: ', error);
     await session.abortTransaction();
