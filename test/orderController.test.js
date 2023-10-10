@@ -150,7 +150,12 @@ describe('OrderController API Tests', () => {
 
   // Delete order - Success case
   it('should delete an order successfully', async () => {
+    await Order.deleteMany({}); // start fresh
+
+    // login as admin
     const signedCookie = await loginAndReturnCookie(adminCredentials);
+
+    // create order
     const orderData = {
       user: admin._id,
       orderItems: [{ album: album._id, quantity: 2 }],
@@ -164,6 +169,7 @@ describe('OrderController API Tests', () => {
       .delete(`/api/v1/orders/${order._id}`) // Assuming testUser is the user you want to delete
       .set('Cookie', signedCookie);
 
+    // Assertions
     expect(response.status).toBe(StatusCodes.OK);
     expect(response.body).toEqual({ msg: 'Success! Order was deleted' });
 
