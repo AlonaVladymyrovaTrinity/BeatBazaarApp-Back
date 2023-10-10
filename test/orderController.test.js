@@ -3,12 +3,18 @@ const { StatusCodes } = require('http-status-codes');
 const request = require('supertest');
 const { MongoMemoryReplSet } = require('mongodb-memory-server');
 const User = require('../src/models/User');
+const { Order } = require('../src/models/Order');
 const Album = require('../src/models/Album');
 const { loginAndReturnCookie } = require('./test_helper');
+const mongoose = require('mongoose');
 
 let server;
 let mongooseConnection;
 let mongodb;
+const adminCredentials = {
+  email: 'Holly@google.com',
+  password: 'secret',
+};
 
 jest.mock('stripe', () => {
   // When `require('stripe')` is called, the below jest mock function will be returned instead
@@ -25,6 +31,7 @@ jest.mock('stripe', () => {
 });
 
 beforeAll(async () => {
+  //A version of the mongo server that supports replica sets must be used for the order controller test cases because Mongo transactions are used
   mongodb = await MongoMemoryReplSet.create({
     replSet: { storageEngine: 'wiredTiger' },
   });
@@ -32,7 +39,6 @@ beforeAll(async () => {
   process.env.MONGO_URL = url;
   mongooseConnection = await connectDB(url);
   server = await app.listen(8001);
-  // process.env.STRIPE_SECRET_KEY = stripeSecretKey; -Akos: I didn't understand what else to do using this approach
 });
 
 afterAll(async () => {
@@ -45,6 +51,7 @@ describe('OrderController API Tests', () => {
   let user;
   let album;
   let userCredentials;
+  let admin;
 
   beforeAll(async () => {
     //create a user
@@ -55,15 +62,20 @@ describe('OrderController API Tests', () => {
       username: 'emily123',
       role: 'user',
     });
+    //create an admin
+    admin = await User.create({
+      email: adminCredentials.email,
+      password: adminCredentials.password,
+      name: 'Holly',
+      username: 'Holly123',
+      role: 'admin',
+    });
     // Create an album
     album = await Album.create({
       albumName: 'Unique Album',
       artistName: 'Unique Artist',
       spotifyUrl: 'https://api.spotify.com/v1/albums/unique',
     });
-  });
-
-  beforeEach(async () => {
     userCredentials = {
       email: 'Emily@google.com',
       password: 'secret',
@@ -95,6 +107,7 @@ describe('OrderController API Tests', () => {
 
     expect(response.status).toBe(StatusCodes.CREATED);
     expect(response.body).toHaveProperty('order');
+    expect(response.body).toHaveProperty('clientSecret');
   });
 
   //create an order -Error case- user tries to create an order without logging in
@@ -117,7 +130,7 @@ describe('OrderController API Tests', () => {
     expect(response.status).toBe(StatusCodes.UNAUTHORIZED);
   });
   //create an order -Error case - some data is missing
-  //get 401 instead of 400.. not sure why
+
   it('should return a 400 status if order items are missing', async () => {
     const signedCookie = await loginAndReturnCookie(userCredentials);
     const orderData = {
@@ -133,5 +146,52 @@ describe('OrderController API Tests', () => {
       .send(orderData);
 
     expect(response.status).toBe(StatusCodes.BAD_REQUEST);
+  });
+
+  // Delete order - Success case
+  it('should delete an order successfully', async () => {
+    const signedCookie = await loginAndReturnCookie(adminCredentials);
+    const orderData = {
+      user: admin._id,
+      orderItems: [{ album: album._id, quantity: 2 }],
+      subtotal: 200,
+      tax: 0.1,
+      total: 210,
+    };
+    const order = await Order.create(orderData);
+
+    const response = await request(app)
+      .delete(`/api/v1/orders/${order._id}`) // Assuming testUser is the user you want to delete
+      .set('Cookie', signedCookie);
+
+    expect(response.status).toBe(StatusCodes.OK);
+    expect(response.body).toEqual({ msg: 'Success! Order was deleted' });
+
+    const allOrders = await Order.find({});
+    expect(allOrders).toHaveLength(0);
+  });
+
+  // Delete order - Error case - Order not found
+  it('should return a 404 status if the order to delete is not found', async () => {
+    await Order.deleteMany({});
+    const nonExistingOrderId = 'nonexistingorderid';
+    const signedCookie = await loginAndReturnCookie(adminCredentials);
+
+    const response = await request(app)
+      .delete(`/api/v1/orders/${nonExistingOrderId}`)
+      .set('Cookie', signedCookie);
+
+    expect(response.status).toBe(StatusCodes.NOT_FOUND);
+  });
+
+  // Delete order - Error case - Unauthorized user
+  it('should return a 403 status if user is not authorized to delete the order (they are not an admin)', async () => {
+    const signedCookie = await loginAndReturnCookie(userCredentials);
+
+    const response = await request(app)
+      .delete(`/api/v1/orders/someorderid`)
+      .set('Cookie', signedCookie);
+
+    expect(response.status).toBe(StatusCodes.FORBIDDEN);
   });
 });
