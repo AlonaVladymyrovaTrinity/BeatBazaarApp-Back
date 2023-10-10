@@ -38,7 +38,7 @@ beforeAll(async () => {
   process.env.MONGO_URL = url;
   mongooseConnection = await connectDB(url);
   server = await app.listen(8001);
-});
+}, 15000);
 
 beforeEach(async () => {
   testUser = await User.create(testUserData);
@@ -56,7 +56,7 @@ afterAll(async () => {
 afterEach(async () => {
   await User.deleteMany({});
   jest.restoreAllMocks();
-});
+}, 15000);
 
 describe('Authentication API Endpoints', () => {
   it('should register a new user and log in', async () => {

@@ -14,23 +14,34 @@ const register = async (req, res) => {
     throw new CustomError.BadRequestError('Please provide all required fields');
   }
 
-  const emailAlreadyExists = await User.findOne({ email }); // Check if a user with the email already exists
-  if (emailAlreadyExists) {
-    throw new CustomError.BadRequestError('Email already exists'); // If user exists, throw an error
-  }
-
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
+    const emailAlreadyExists = await User.findOne({ email }); // Check if a user with the email already exists
+    if (emailAlreadyExists) {
+      throw new CustomError.BadRequestError('Email already exists'); // If user exists, throw an error
+    }
 
-    const isFirstAccount = (await User.countDocuments({}, { session })) === 0; // Check if it's the first account
+    const isFirstAccount = (await User.countDocuments({})) === 0; // Check if it's the first account
     const role = isFirstAccount ? 'admin' : 'user'; // Assign a role based on first account or not
 
     const [user] = await User.create(
-      [{ name, email, password, username, role }],
+      [
+        {
+          name,
+          username,
+          email,
+          password,
+          role,
+        },
+      ],
       { session }
     ); // Create a new user in the database
+
+    // Send the welcome email
+    await emailSender.sendWelcomeEmail(user.email, user);
+
     const tokenUser = createTokenUser(user); // Create a token based on user data
     attachCookiesToResponse({ res, user: tokenUser }); // Attach the token to cookies and send in the response
 
@@ -38,13 +49,13 @@ const register = async (req, res) => {
 
     res.status(StatusCodes.CREATED).json({ user: tokenUser }); // Send a successful response with user data
   } catch (error) {
-    console.error('ERROR: ', error);
     await session.abortTransaction();
 
     throw error;
   } finally {
-    await session.endSession();
+    session.endSession();
   }
+
   /*
     #swagger.summary = 'Register a new user'
     #swagger.parameters['user'] = {
