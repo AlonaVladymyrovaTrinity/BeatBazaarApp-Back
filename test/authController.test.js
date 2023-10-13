@@ -57,9 +57,9 @@ afterEach(async () => {
 }, 15000);
 
 describe('Authentication API Endpoints', () => {
-  beforeEach(async () => {
-    await User.create(testUser);
-  });
+  // beforeEach(async () => {
+  //   await User.create(testUser);
+  // });
   it('should register a new user and log in', async () => {
     const emailSpy = jest.spyOn(sender, 'sendWelcomeEmail');
     // Arrange: Register a new user
