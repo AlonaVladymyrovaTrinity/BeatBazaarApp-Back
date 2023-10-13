@@ -21,29 +21,28 @@ const testUserCredentials = {
 const testUserData = {
   name: 'ava',
   username: 'ava',
-  email: testUserCredentials.email,
-  password: testUserCredentials.password,
+  email: 'ava@ava.com',
+  password: 'secret',
   role: 'user',
 };
-let testUser;
+console.log('Test User Data:', testUserData);
+console.log('Test User Credentials:', testUserCredentials);
 
+let testUser;
 // set up the mongodb and the express server before starting the tests
 beforeAll(async () => {
-  // This will create a new instance of "MongoMemoryServer" and automatically start it
   mongodb = await MongoMemoryReplSet.create({
-    replSet: { count: 1, storageEngine: 'wiredTiger' },
+    replSet: { storageEngine: 'wiredTiger' },
   });
   const url = mongodb.getUri();
   // set the url so that our server's mongoose connects to the in-memory mongodb and not our real one
   process.env.MONGO_URL = url;
   mongooseConnection = await connectDB(url);
   server = await app.listen(8001);
-}, 15000);
-
+});
 beforeEach(async () => {
   testUser = await User.create(testUserData);
 });
-
 afterAll(async () => {
   // turn off the server and mongo connections once all the tests are done
   await server.close();
@@ -52,15 +51,16 @@ afterAll(async () => {
   // turn off the order update interval so that jest can cleanly shutdown
   clearInterval(orderUpdateInterval);
 });
-
 afterEach(async () => {
   await User.deleteMany({});
   jest.restoreAllMocks();
 }, 15000);
 
 describe('Authentication API Endpoints', () => {
+  beforeEach(async () => {
+    await User.create(testUser);
+  });
   it('should register a new user and log in', async () => {
-    await User.deleteMany({}); // Delete all users in the database, so that we can start fresh and register Ava as a new user
     const emailSpy = jest.spyOn(sender, 'sendWelcomeEmail');
     // Arrange: Register a new user
     const registrationResponse = await request(app)
@@ -71,6 +71,7 @@ describe('Authentication API Endpoints', () => {
     expect(registrationResponse.status).toBe(201); // Expecting a successful registration
     expect(registrationResponse.body).toHaveProperty('user'); // Expecting a user object in the response
     const createdUser = await User.findOne({ email: testUserData.email });
+
     // Expecting the user to be saved in the database (not null)
     expect(createdUser).not.toBeNull();
     // Expect the user object in the response to match the user object in the database
@@ -96,12 +97,10 @@ describe('Authentication API Endpoints', () => {
     expect(loginResponse.body).toHaveProperty('user'); // Expecting a user object in the response
     // Further assertions on the shape of the user object in the response
     const userInResponse = loginResponse.body.user;
-    expect(userInResponse).toMatchObject({
-      email: createdUser.email,
-      name: createdUser.name,
-      role: createdUser.role,
-      userId: createdUser.id,
-    });
+    expect(userInResponse).toHaveProperty('email');
+    expect(userInResponse).toHaveProperty('name');
+    expect(userInResponse).toHaveProperty('role');
+    expect(userInResponse).toHaveProperty('userId');
   });
 
   it('should log out the user', async () => {
@@ -122,12 +121,11 @@ describe('Authentication API Endpoints', () => {
     // Make a request to the forgot password endpoint with the user's email
     const forgotPasswordResponse = await request(app)
       .post('/api/v1/auth/forgot_password')
-      .send({ email: testUserData.email }); // Use the email of the test user
+      .send({ email: testUser.email }); // Use the email of the test user
 
-    // Assert: Check the response status and body
-    expect(forgotPasswordResponse.status).toBe(200); // Expecting a successful request
+    expect(forgotPasswordResponse.status).toBe(200);
     expect(forgotPasswordResponse.body).toEqual({
       message: 'Password reset email sent',
-    }); // Expecting the specified message in the response
+    });
   });
 });

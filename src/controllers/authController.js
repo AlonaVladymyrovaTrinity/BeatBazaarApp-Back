@@ -19,6 +19,7 @@ const register = async (req, res) => {
   try {
     session.startTransaction();
     const emailAlreadyExists = await User.findOne({ email }); // Check if a user with the email already exists
+
     if (emailAlreadyExists) {
       throw new CustomError.BadRequestError('Email already exists'); // If user exists, throw an error
     }
@@ -44,19 +45,16 @@ const register = async (req, res) => {
 
     const tokenUser = createTokenUser(user); // Create a token based on user data
     attachCookiesToResponse({ res, user: tokenUser }); // Attach the token to cookies and send in the response
-
     await session.commitTransaction();
-
     res.status(StatusCodes.CREATED).json({ user: tokenUser }); // Send a successful response with user data
   } catch (error) {
     await session.abortTransaction();
-
     throw error;
   } finally {
     session.endSession();
   }
-
-  /*
+};
+/* 
     #swagger.summary = 'Register a new user'
     #swagger.parameters['user'] = {
       in: 'body',
@@ -79,7 +77,6 @@ const register = async (req, res) => {
       description: 'Bad request, missing email, name, password, or username'
     }
   */
-};
 
 const login = async (req, res) => {
   const { email, password } = req.body;
