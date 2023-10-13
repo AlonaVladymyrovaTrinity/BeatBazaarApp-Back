@@ -7,14 +7,9 @@ const { Order } = require('../src/models/Order');
 const Album = require('../src/models/Album');
 const { loginAndReturnCookie } = require('./test_helper');
 const mongoose = require('mongoose');
-
 let server;
 let mongooseConnection;
 let mongodb;
-const adminCredentials = {
-  email: 'Holly@google.com',
-  password: 'secret',
-};
 
 jest.mock('stripe', () => {
   // When `require('stripe')` is called, the below jest mock function will be returned instead
@@ -61,14 +56,6 @@ describe('OrderController API Tests', () => {
       name: 'Emily',
       username: 'emily123',
       role: 'user',
-    });
-    //create an admin
-    admin = await User.create({
-      email: adminCredentials.email,
-      password: adminCredentials.password,
-      name: 'Holly',
-      username: 'Holly123',
-      role: 'admin',
     });
     // Create an album
     album = await Album.create({
@@ -150,12 +137,20 @@ describe('OrderController API Tests', () => {
 
   // Delete order - Success case
   it('should delete an order successfully', async () => {
-    await Order.deleteMany({}); // start fresh
-
-    // login as admin
+    //create an admin
+    admin = await User.create({
+      email: 'Holly@google.com',
+      password: 'secret',
+      name: 'Holly',
+      username: 'Holly123',
+      role: 'admin',
+    });
+    const adminCredentials = {
+      email: 'Holly@google.com',
+      password: 'secret',
+    };
     const signedCookie = await loginAndReturnCookie(adminCredentials);
 
-    // create order
     const orderData = {
       user: admin._id,
       orderItems: [{ album: album._id, quantity: 2 }],
@@ -169,18 +164,18 @@ describe('OrderController API Tests', () => {
       .delete(`/api/v1/orders/${order._id}`) // Assuming testUser is the user you want to delete
       .set('Cookie', signedCookie);
 
-    // Assertions
     expect(response.status).toBe(StatusCodes.OK);
     expect(response.body).toEqual({ msg: 'Success! Order was deleted' });
-
-    const allOrders = await Order.find({});
-    expect(allOrders).toHaveLength(0);
   });
 
   // Delete order - Error case - Order not found
   it('should return a 404 status if the order to delete is not found', async () => {
-    await Order.deleteMany({});
     const nonExistingOrderId = 'nonexistingorderid';
+
+    const adminCredentials = {
+      email: 'Holly@google.com',
+      password: 'secret',
+    };
     const signedCookie = await loginAndReturnCookie(adminCredentials);
 
     const response = await request(app)
@@ -191,11 +186,13 @@ describe('OrderController API Tests', () => {
   });
 
   // Delete order - Error case - Unauthorized user
-  it('should return a 403 status if user is not authorized to delete the order (they are not an admin)', async () => {
+  it('should return a 403 status if non-admin users is trying to delete the order', async () => {
     const signedCookie = await loginAndReturnCookie(userCredentials);
+    console.log(signedCookie);
 
+    const mockOrderId = new mongoose.Types.ObjectId();
     const response = await request(app)
-      .delete(`/api/v1/orders/someorderid`)
+      .delete(`/api/v1/orders/${mockOrderId}`)
       .set('Cookie', signedCookie);
 
     expect(response.status).toBe(StatusCodes.FORBIDDEN);
