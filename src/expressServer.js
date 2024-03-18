@@ -51,7 +51,7 @@ app.use(limiter);
 app.use(xss());
 app.use(
   cors({
-    origin: [/localhost:3000$/, /beatbazaar\.onrender\.com$/],
+    origin: [/localhost:3003$/, /beatbazaar\.alona\.dev$/],
     credentials: true,
   })
 );
@@ -172,7 +172,7 @@ const http = require('http');
 const server = http.createServer(app);
 const socketServer = new Server(server, {
   cors: {
-    origin: [/localhost:3000$/, /beatbazaar\.onrender\.com$/],
+    origin: [/localhost:3003$/, /beatbazaar\.alona\.dev$/],
   },
 });
 const setupSocket = require('./live');
